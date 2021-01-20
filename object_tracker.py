@@ -26,7 +26,7 @@ from tools import generate_detections as gdet
 from queue import Queue
 import datetime
 flags.DEFINE_string('framework', 'tf', '(tf, tflite, trt')
-flags.DEFINE_string('weights', './checkpoints/yolov4-v3',
+flags.DEFINE_string('weights', './checkpoints/yolov4-v4',
                     'path to weights file')
 flags.DEFINE_integer('size', 608, 'resize images to')
 flags.DEFINE_boolean('tiny', False, 'yolo or yolo-tiny')
