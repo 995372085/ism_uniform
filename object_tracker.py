@@ -1,7 +1,7 @@
 import os
 
 # comment out below line to enable tensorflow logging outputs
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 # os.environ["CUDA_VISIBLE_DEVICES"] = "CPU"
 import time
 import tensorflow as tf
@@ -25,6 +25,7 @@ from deep_sort.tracker import Tracker
 from tools import generate_detections as gdet
 from queue import Queue
 import datetime
+
 flags.DEFINE_string('framework', 'tf', '(tf, tflite, trt')
 flags.DEFINE_string('weights', './checkpoints/yolov4-v4',
                     'path to weights file')
@@ -43,6 +44,9 @@ flags.DEFINE_boolean('count', True, 'count objects being tracked on screen')
 
 
 def main(_argv):
+    global ip
+    global personDict
+    global timer
     # Definition of the parameters
     # 余弦距离的控制阈值
     max_cosine_distance = 0.4
@@ -80,10 +84,7 @@ def main(_argv):
         infer = saved_model_loaded.signatures['serving_default']
     # begin video capture
     try:
-        # cap = cv2.VideoCapture("./outputVideo.mp4")
-        cap = cv2.VideoCapture("rtsp://admin:a1234567@10.34.142.35/cam/realmonitor?channel=1&subtype=0")
-        # cap = cv2.VideoCapture("./test8.jpg")
-        # cap = cv2.VideoCapture("&")
+        cap = cv2.VideoCapture("rtsp://admin:a1234567@10.34.142." + str(ip) + "/cam/realmonitor?channel=1&subtype=0")
         print("连接摄像头成功！")
     except:
         print("连接摄像头失败！")
@@ -100,7 +101,6 @@ def main(_argv):
         out = cv2.VideoWriter(FLAGS.output, codec, fps, (width, height))
 
     # while video is running
-    global timer
     while True:
         return_value, frame = cap.read()
         # if timer != 0 and int(time.time()) != timer:
@@ -164,14 +164,8 @@ def main(_argv):
         # read in all class names from config
         # 从config.py文件中读取所有classes
         class_names = utils.read_class_names(cfg.YOLO.CLASSES)
-        # by default allow all classes in .names file
-        # allowed_classes = list(class_names.values())
-
-        # custom allowed classes (uncomment line below to customize tracker for only people)
         # 设置需要检测目标的class
-        # allowed_classes = ['uniform', 'un_uniform', 'out_uniform']
         allowed_classes = ['uniform', 'un_uniform', 'out_uniform']
-
         # loop through objects and use class index to get class name, allow only classes in allowed_classes list
         names = []
         deleted_indx = []
@@ -237,20 +231,20 @@ def main(_argv):
             gj = isBelong(bbox, gx1, gy1, gx2, gy2)
             # 判断是否进入预警区域
             if not isBelong(bbox, yx1, yy1, yx2, yy2):
-                print("未进入预警g区域")
+                print("未进入预警区域")
                 continue
             print("进入预警/告警区域了")
             # 创建告警标志
             exceptionFlag = False
             # 获取到轨迹字典
-            map = persondict.get(int(track.track_id))
+            map = personDict.get(int(track.track_id))
             # 判断是否有轨迹
             if map is not None:
                 mflag = map["mflag"]
                 # 告警过 并且 现在在不在告警区域 说明是第二人 则删除此人轨迹
                 if mflag == 1 and not gj:
                     print("删除轨迹" + str(int(track.track_id)))
-                    del persondict[int(track.track_id)]
+                    del personDict[int(track.track_id)]
                     continue
                 # 获取轨迹队列
                 que = map["que"]
@@ -267,19 +261,18 @@ def main(_argv):
                         if (que.queue[i] <= que.queue[i + 1]):
                             count += 1
                 # 判断是否需要告警  轨迹趋势+是否属于告警区域+是否为第一次告警+   经过预警区域
+                # 提高精度可以判断第一次坐标是否属于预警区域不属于告警区域
                 if ((int(bbox[3]) - map["first"] > 30) and count >= 10) and gj and mflag == 0:
                     # 达到阈值，确定画框
                     exceptionFlag = True
                     # 清空轨迹队列
-                    print("********************清空轨迹队列**************************************")
+                    print("********************清空轨迹队列+告警***************************")
                     que.queue.clear()
                     print(que.queue)
                     map["que"] = que
                     map["mflag"] = 1
                     map["first"] = 1080
                     map["count"] = 0
-                    # del persondict[int(track.track_id)]
-                    # print(persondict.get(int(track.track_id)))
                     # 打开保存标志
                     if not saveFlag:
                         saveFlag = True
@@ -301,7 +294,7 @@ def main(_argv):
                 que.put(int(bbox[3]))
                 map["first"] = int(bbox[3])
                 # 首次出现，存入字典
-                persondict[int(track.track_id)] = map
+                personDict[int(track.track_id)] = map
 
             if exceptionFlag:
                 cv2.putText(frame, "save", (100, 100), cv2.FONT_HERSHEY_COMPLEX_SMALL, 2, (0, 255, 0), 2)
@@ -336,21 +329,23 @@ def main(_argv):
         # if output flag is set, save video file
         if saveFlag:
             imageName = str(time.strftime('%Y%m%d%H%M%S', time.localtime(time.time()))) + ".jpg"
-            imagePath = r"/photo/ism_uniform/35/" + str(datetime.datetime.now().strftime("%Y-%m-%d")) + "/"
-            if not os.path.exists(r"/photo/ism_uniform/35/"):
-                os.makedirs(r"/photo/ism_uniform/35/")
-            if not os.path.exists(r"/photo/ism_uniform/35/" + "/" + str(datetime.datetime.now().strftime("%Y-%m-%d"))):
-                os.makedirs(r"/photo/ism_uniform/35/" + "/" + str(datetime.datetime.now().strftime("%Y-%m-%d")))
+            imagePath = r"/photo/ism_uniform/" + str(ip) + "/" + str(datetime.datetime.now().strftime("%Y-%m-%d")) + "/"
+            if not os.path.exists(r"/photo/ism_uniform/" + str(ip) + "/"):
+                os.makedirs(r"/photo/ism_uniform/" + str(ip) + "/")
+            if not os.path.exists(
+                    r"/photo/ism_uniform/" + str(ip) + "/" + "/" + str(datetime.datetime.now().strftime("%Y-%m-%d"))):
+                os.makedirs(
+                    r"/photo/ism_uniform/" + str(ip) + "/" + "/" + str(datetime.datetime.now().strftime("%Y-%m-%d")))
             # 上传图片至文件服务器
             # img = cv2.resize(result, (1360, 765))
             # cv2.imwrite(imagePath + imageName, result, [cv2.IMWRITE_JPEG_QUALITY, 75])
-            cv2.imwrite(imagePath+imageName, result)
+            cv2.imwrite(imagePath + imageName, result)
             print("Save!!!")
         if FLAGS.output:
             out.write(result)
         # timer = int(time.time() + 0.5)
-        print(persondict)
         if cv2.waitKey(1) & 0xFF == ord('q'): break
+    print(personDict)
     cv2.destroyAllWindows()
 
 
@@ -361,10 +356,7 @@ def isBelong(bbox, x1, y1, x2, y2):
     # 获取线的范围
     k = (y2 - y1) / (x2 - x1)
     b = y2 - k * x2
-    # print("y={}*x+{}".format(k, b))
-    # print("{}---{}".format(xb, yb))
     y = k * xb + b
-    # print("y={}".format(y))
     # 比较yb和y判断此点是否在区域中
     if yb > y:
         # 在区域中
@@ -374,8 +366,9 @@ def isBelong(bbox, x1, y1, x2, y2):
 
 if __name__ == '__main__':
     try:
-        persondict = {}
+        personDict = {}
         timer = 0
+        ip = 35
         app.run(main)
     except SystemExit:
         pass
