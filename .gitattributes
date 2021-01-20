@@ -1,1 +1,2 @@
 checkpoints/yolov4-v4/variables/variables.data-00000-of-00001 filter=lfs diff=lfs merge=lfs -text
+data/yolov4-v4.weights filter=lfs diff=lfs merge=lfs -text
